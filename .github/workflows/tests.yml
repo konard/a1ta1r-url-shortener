@@ -1,0 +1,73 @@
+name: Tests
+
+on:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:5.7
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: UrlShortenerDB
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+          extensions: pdo, pdo_mysql
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: Wait for MySQL to be ready
+        run: |
+          while ! mysqladmin ping -h "127.0.0.1" --silent; do
+            sleep 1
+          done
+
+      - name: Initialize database schema
+        run: mysql -h 127.0.0.1 -u root -proot UrlShortenerDB < schema.sql
+
+      - name: Run tests
+        run: |
+          cat > phpunit.ci.xml << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/6.3/phpunit.xsd"
+                   bootstrap="vendor/autoload.php"
+                   forceCoversAnnotation="true"
+                   beStrictAboutCoversAnnotation="true"
+                   beStrictAboutOutputDuringTests="true"
+                   beStrictAboutTodoAnnotatedTests="true"
+                   verbose="false"
+                   colors="true">
+              <testsuite>
+                  <directory suffix="Test.php">tests</directory>
+              </testsuite>
+              <php>
+                  <var name="DB_DSN" value="mysql:dbname=UrlShortenerDB;host=127.0.0.1" />
+                  <var name="DB_USER" value="root" />
+                  <var name="DB_PASSWD" value="root" />
+                  <var name="DB_DBNAME" value="UrlShortenerDB" />
+              </php>
+          </phpunit>
+          EOF
+          vendor/bin/phpunit --configuration phpunit.ci.xml

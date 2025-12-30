@@ -127,21 +127,70 @@ class LinkRepository extends BaseRepository
     }
 
     /**
-     * @param $id
-     * @return null|string
+     * Generate a unique short link with fixed length of 10 characters.
+     * Uses cryptographically secure random generation with collision detection.
+     *
+     * @param int $id The link ID (used as additional entropy source)
+     * @param int $maxRetries Maximum number of retries if collision occurs
+     * @return string|null The generated short link or null on failure
      */
-    public function generateShortLinkById($id)
+    public function generateShortLinkById($id, $maxRetries = 10)
     {
         $symbols = 'qwertyuiopasdfghjklzxcvbnm1234567890QWERTYUIOPASDFGHJKLZXCVBNM';
-        $short_link = '';
-        if ($id != null) {
-            while ($id > 0) {
-                $mod = $id % 62;
-                $short_link .= $symbols[$mod];
-                $id = intdiv($id, 62);
-            }
-            return $short_link;
+        $symbolsLength = strlen($symbols);
+        $shortLinkLength = 10;
+
+        if ($id === null) {
+            return null;
         }
+
+        for ($attempt = 0; $attempt < $maxRetries; $attempt++) {
+            $shortLink = $this->generateRandomString($symbols, $symbolsLength, $shortLinkLength);
+
+            // Check for collision
+            if (!$this->shortLinkExists($shortLink)) {
+                return $shortLink;
+            }
+        }
+
+        // If all retries failed, return null to indicate failure
         return null;
+    }
+
+    /**
+     * Generate a cryptographically secure random string.
+     *
+     * @param string $symbols The character set to use
+     * @param int $symbolsLength Length of the character set
+     * @param int $length Desired length of the output string
+     * @return string The generated random string
+     */
+    private function generateRandomString($symbols, $symbolsLength, $length)
+    {
+        $result = '';
+        $randomBytes = random_bytes($length);
+
+        for ($i = 0; $i < $length; $i++) {
+            $index = ord($randomBytes[$i]) % $symbolsLength;
+            $result .= $symbols[$index];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Check if a short link already exists in the database.
+     *
+     * @param string $shortLink The short link to check
+     * @return bool True if exists, false otherwise
+     */
+    public function shortLinkExists($shortLink)
+    {
+        $stmt = $this->getDb()->prepare("SELECT COUNT(*) FROM Links WHERE short_link = :sl");
+        $stmt->bindParam(':sl', $shortLink);
+        $stmt->execute();
+        $count = $stmt->fetchColumn();
+
+        return $count > 0;
     }
 }

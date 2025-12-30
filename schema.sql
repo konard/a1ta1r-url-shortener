@@ -55,7 +55,7 @@ CREATE TABLE `Links` (
   `id`         INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
   `user_id`    INT(10) UNSIGNED NOT NULL,
   `full_link`  VARCHAR(256)     NOT NULL,
-  `short_link` VARCHAR(8)                DEFAULT NULL,
+  `short_link` VARCHAR(10)               DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `short_link` (`short_link`),
   KEY `idx_user_id` (`user_id`),
